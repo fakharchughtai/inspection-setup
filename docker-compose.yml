@@ -1,0 +1,81 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: inspection-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inspection_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../inspection-api/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - inspection-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NestJS Backend API
+  api:
+    build:
+      context: ../inspection-api
+      dockerfile: Dockerfile
+    container_name: inspection-api
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    env_file:
+      - ../inspection-api/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - inspection-network
+    volumes:
+      - api_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Next.js Frontend UI
+  ui:
+    build:
+      context: ../inspection-ui
+      dockerfile: Dockerfile
+    container_name: inspection-ui
+    restart: unless-stopped
+    ports:
+      - '3001:3001'
+    env_file:
+      - ../inspection-ui/.env
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - inspection-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  postgres_data:
+    driver: local
+  api_uploads:
+    driver: local
+
+networks:
+  inspection-network:
+    driver: bridge
