@@ -70,10 +70,37 @@ services:
       retries: 3
       start_period: 40s
 
+  # ClamAV On-Demand Scanner (does NOT auto-start)
+  clamav:
+    image: clamav/clamav:latest
+    container_name: inspection-clamav
+    restart: "no"
+    profiles:
+      - tools  # Only starts when explicitly requested via scripts
+    volumes:
+      # Source code directories (read-only)
+      - /var/www:/scan/var/www:ro
+      # System temp directories (where malware was found)
+      - /tmp:/scan/tmp:ro
+      - /var/tmp:/scan/var/tmp:ro
+      # Home directory
+      - /home/ubuntu:/scan/home/ubuntu:ro
+      # Docker volumes (read-only)
+      - postgres_data:/scan/volumes/postgres_data:ro
+      - api_uploads:/scan/volumes/api_uploads:ro
+      # Virus database storage (persistent across scans)
+      - clamav_db:/var/lib/clamav
+      # Scan reports output directory
+      - ./scan-reports:/reports
+    networks:
+      - inspection-network
+
 volumes:
   postgres_data:
     driver: local
   api_uploads:
+    driver: local
+  clamav_db:
     driver: local
 
 networks:
